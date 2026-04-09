@@ -1,0 +1,6 @@
+@PersonalVault_HostAddress = http://localhost:5030
+
+GET {{PersonalVault_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

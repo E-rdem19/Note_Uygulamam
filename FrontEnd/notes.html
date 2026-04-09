@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Vault - Notlarım</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: white; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e94560; padding-bottom: 10px; margin-bottom: 20px; }
+        h2 { color: #e94560; margin: 0; }
+        .user-info { font-size: 0.9rem; color: #4ee44e; }
+        .logout-btn { background: #e94560; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        
+        /* Not Ekleme Formu */
+        .add-note-box { background: #16213e; padding: 20px; border-radius: 10px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .add-note-box input, .add-note-box textarea { 
+            width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 5px; border: none; 
+            background: #0f3460; color: white; box-sizing: border-box; font-family: inherit;
+        }
+        .add-note-box textarea { height: 80px; resize: none; }
+        .btn-save { background: #4ee44e; color: #16213e; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.3s; }
+        .btn-save:hover { background: #3dbd3d; }
+
+        /* Not Kartı */
+        .note-card { background: #16213e; padding: 15px; border-radius: 10px; margin-bottom: 15px; border-left: 5px solid #e94560; transition: 0.3s; position: relative; }
+        .note-card:hover { transform: translateX(10px); background: #1f2d50; }
+        .note-title { font-size: 1.2rem; font-weight: bold; color: #4ee44e; margin-bottom: 5px; padding-right: 60px; }
+        .note-content { color: #ccc; line-height: 1.5; white-space: pre-wrap; }
+        .note-date { font-size: 0.7rem; color: #666; margin-top: 10px; text-align: right; }
+        
+        /* Silme Butonu */
+        .delete-btn { 
+            position: absolute; top: 15px; right: 15px; 
+            background: #ff4d4d; color: white; border: none; 
+            padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 0.75rem;
+            transition: 0.2s; opacity: 0.7;
+        }
+        .delete-btn:hover { opacity: 1; transform: scale(1.05); background: #e94560; }
+        .edit-btn {
+            position: absolute; top: 15px; right: 110px;
+            background: #4ee44e; color: #16213e; border: none;
+            padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 0.75rem;
+            transition: 0.2s; opacity: 0.8;
+        }
+        .edit-btn:hover { opacity: 1; transform: scale(1.05); background: #3dbd3d; }
+        .btn-cancel { background: #e94560; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.3s; margin-top: 10px; }
+        .btn-cancel:hover { background: #cf3a54; }
+        
+        #no-notes { text-align: center; color: #666; margin-top: 50px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h2>Personal Vault</h2>
+            <div class="user-info" id="welcome-msg">Yükleniyor...</div>
+        </div>
+        <button class="logout-btn" onclick="logout()">Güvenli Çıkış</button>
+    </header>
+
+    <div class="add-note-box">
+        <input type="text" id="noteTitle" placeholder="Not Başlığı...">
+        <textarea id="noteContent" placeholder="Notunuzu buraya yazın..."></textarea>
+        <button class="btn-save" onclick="saveNote()"><span id="saveButtonText">Notu Kaydet</span></button>
+        <button class="btn-cancel" id="cancel-edit-btn" onclick="cancelEdit()" style="display:none;">Düzenlemeyi İptal Et</button>
+    </div>
+
+    <div id="notes-container"></div>
+
+    <div id="no-notes" style="display: none;">
+        <p>Henüz hiç notunuz yok. İlk notunuzu yukarıdan ekleyebilirsiniz!</p>
+    </div>
+</div>
+
+<script>
+    // Sayfa yüklendiğinde kontrol et
+    window.onload = async function() {
+        const userId = localStorage.getItem('userId');
+        const userName = localStorage.getItem('userName');
+        const token = localStorage.getItem('userToken');
+
+        if (!userId || !token) {
+            alert("Oturum bulunamadı! Lütfen önce giriş yapın.");
+            window.location.href = "index.html";
+            return;
+        }
+
+        document.getElementById('welcome-msg').innerText = "Hoş geldin, " + (userName || "Kullanıcı");
+        fetchNotes(userId);
+    };
+
+    // --- NOTLARI GETİRME ---
+    async function fetchNotes(userId) {
+        try {
+            const token = localStorage.getItem('userToken');
+            const response = await fetch(`http://localhost:5030/api/note/${userId}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                }
+            });
+
+            if (response.status === 401) {
+                alert("Oturum süresi dolmuş!");
+                logout();
+                return;
+            }
+
+            const notes = await response.json();
+            const container = document.getElementById('notes-container');
+            const noNotes = document.getElementById('no-notes');
+
+            if (notes.length === 0) {
+                noNotes.style.display = 'block';
+                container.innerHTML = "";
+                return;
+            }
+
+            noNotes.style.display = 'none';
+            
+            // C# tarafındaki 'Id' isimlendirmesine dikkat (Büyük/Küçük harf uyumu JSON'da değişebilir)
+            container.innerHTML = notes.map(note => `
+                <div class="note-card">
+                    <button class="edit-btn" data-note-id="${note.id || note.Id}" data-note-title="${escapeHtml(note.title || note.Title)}" data-note-content="${escapeHtml(note.content || note.Content)}">Güncelle</button>
+                    <button class="delete-btn" onclick="deleteNote(${note.id || note.Id})">Sil</button>
+                    <div class="note-title">${note.title || note.Title}</div>
+                    <div class="note-content">${note.content || note.Content}</div>
+                    <div class="note-date">${new Date(note.createdAt || note.CreatedAt).toLocaleString('tr-TR')}</div>
+                </div>
+            `).join('');
+
+            container.querySelectorAll('.edit-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    startEditNote(this.dataset.noteId, this.dataset.noteTitle, this.dataset.noteContent);
+                });
+            });
+        } catch (err) {
+            console.error("Notlar çekilirken hata oluştu:", err);
+        }
+    }
+
+    function escapeHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/\n/g, '\\n');
+    }
+
+    // --- YENİ NOT EKLEME ---
+    async function addNote() {
+        const title = document.getElementById('noteTitle').value;
+        const content = document.getElementById('noteContent').value;
+        const token = localStorage.getItem('userToken');
+        const userId = localStorage.getItem('userId');
+
+        if (!title.trim() || !content.trim()) {
+            alert("Lütfen başlık ve içerik girin!");
+            return;
+        }
+
+        try {
+            const response = await fetch('http://localhost:5030/api/note', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ Title: title, Content: content })
+            });
+
+            if (response.ok) {
+                document.getElementById('noteTitle').value = "";
+                document.getElementById('noteContent').value = "";
+                fetchNotes(userId); // Listeyi anında tazele
+            } else {
+                alert("Not kaydedilemedi!");
+            }
+        } catch (err) {
+            console.error("Ekleme hatası:", err);
+            alert("Sunucuya bağlanılamadı!");
+        }
+    }
+
+    let currentEditNoteId = null;
+
+    function startEditNote(id, title, content) {
+        title = title.replace(/\\n/g, '\n');
+        content = content.replace(/\\n/g, '\n');
+        currentEditNoteId = id;
+        document.getElementById('noteTitle').value = title;
+        document.getElementById('noteContent').value = content;
+        document.getElementById('saveButtonText').innerText = 'Güncelle';
+        document.getElementById('cancel-edit-btn').style.display = 'block';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelEdit() {
+        currentEditNoteId = null;
+        document.getElementById('noteTitle').value = "";
+        document.getElementById('noteContent').value = "";
+        document.getElementById('saveButtonText').innerText = 'Notu Kaydet';
+        document.getElementById('cancel-edit-btn').style.display = 'none';
+    }
+
+    async function saveNote() {
+        if (currentEditNoteId) {
+            await updateNote(currentEditNoteId);
+        } else {
+            await addNote();
+        }
+    }
+
+    async function updateNote(noteId) {
+        const title = document.getElementById('noteTitle').value;
+        const content = document.getElementById('noteContent').value;
+        const token = localStorage.getItem('userToken');
+        const userId = localStorage.getItem('userId');
+
+        if (!title.trim() || !content.trim()) {
+            alert("Lütfen güncelleme için başlık ve içerik girin!");
+            return;
+        }
+
+        try {
+            const response = await fetch(`http://localhost:5030/api/note/${noteId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ Title: title, Content: content })
+            });
+
+            if (response.ok) {
+                cancelEdit();
+                fetchNotes(userId);
+            } else {
+                alert("Not güncellenemedi!");
+            }
+        } catch (err) {
+            console.error("Güncelleme hatası:", err);
+            alert("Sunucuya bağlanılamadı!");
+        }
+    }
+
+    // --- NOT SİLME ---
+    async function deleteNote(noteId) {
+        if (!confirm("Bu notu silmek istediğinize emin misiniz?")) return;
+
+        const token = localStorage.getItem('userToken');
+        const userId = localStorage.getItem('userId');
+
+        try {
+            const response = await fetch(`http://localhost:5030/api/note/${noteId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': 'Bearer ' + token
+                }
+            });
+
+            if (response.ok) {
+                fetchNotes(userId); // Listeyi tazeleyerek notun gittiğini gör
+            } else {
+                alert("Silme işlemi başarısız!");
+            }
+        } catch (err) {
+            console.error("Silme hatası:", err);
+            alert("Silme işlemi sırasında bir hata oluştu!");
+        }
+    }
+
+    function logout() {
+        localStorage.clear();
+        window.location.href = "index.html";
+    }
+</script>
+
+</body>
+</html>

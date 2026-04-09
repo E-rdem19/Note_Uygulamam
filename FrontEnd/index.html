@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Vault - Login</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-card { background: #16213e; padding: 2rem; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 350px; }
+        h2 { text-align: center; color: #e94560; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 5px; border: none; background: #0f3460; color: white; box-sizing: border-box; }
+        
+        /* Butonlar için genel stil */
+        button { width: 100%; padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: 0.3s; }
+        
+        .btn-login { background: #e94560; color: white; }
+        .btn-login:hover { background: #cf3a54; }
+        
+        /* Kayıt butonu stili */
+        .btn-register { background: transparent; color: #4ee44e; border: 1px solid #4ee44e; }
+        .btn-register:hover { background: #4ee44e; color: #16213e; }
+        
+        #message { margin-top: 15px; text-align: center; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h2>Personal Vault</h2>
+        <input type="text" id="username" placeholder="Kullanıcı Adı">
+        <input type="password" id="password" placeholder="Şifre">
+        
+        <button class="btn-login" onclick="login()">Giriş Yap</button>
+        
+        <button class="btn-register" onclick="window.location.href='Register.html'">Kayıt Ol</button>
+        
+        <div id="message"></div>
+    </div>
+
+    <script>
+    async function login() {
+    const user = document.getElementById('username').value;
+    const pass = document.getElementById('password').value;
+    const msgDiv = document.getElementById('message');
+
+    if (!user || !pass) {
+        msgDiv.style.color = "#ff4d4d";
+        msgDiv.innerText = "Lütfen tüm alanları doldurun!";
+        return;
+    }
+
+    msgDiv.innerText = "Bağlanıyor...";
+
+    try {
+        const response = await fetch('http://localhost:5030/api/auth/login-secure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // DÜZELTME: Sadece Username ve Password gönderiyoruz
+            body: JSON.stringify({ Username: user, Password: pass }) 
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            msgDiv.style.color = "#4ee44e";
+            msgDiv.innerText = "Hoş geldin, " + data.user + "!";
+
+            // Backend'den gelen verileri kaydediyoruz
+            // Backend'in "userId" (küçük 'u') veya "UserId" döndüğünden emin ol
+            localStorage.setItem("userToken",data.token);
+            localStorage.setItem("userId", data.userId || data.UserId); 
+            localStorage.setItem("userName", data.user);
+
+            setTimeout(() => {
+                window.location.href = "notes.html";
+            }, 1000);
+        } else {
+            msgDiv.style.color = "#ff4d4d";
+            msgDiv.innerText = "Giriş Başarısız: " + (data.message || "Hatalı bilgiler.");
+        }
+    } catch (err) {
+        msgDiv.style.color = "#ff4d4d";
+        msgDiv.innerText = "Sunucuya bağlanılamadı!";
+        console.error("Hata detayı:", err);
+    }
+}
+    </script>
+</body>
+</html>
